@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   MapPin, Users, Calendar, DollarSign, Plus, Filter, Search,
-  Brain, Calculator,
+  Brain, Calculator, Clock, ChevronRight, TrendingUp, X,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -30,24 +30,28 @@ const roleColors: Record<string, string> = {
   'Fleet Support': 'bg-cyan-50 border-cyan-100',
 };
 
-const RequirementCard: React.FC<{ req: Requirement; onViewBids: (req: Requirement) => void }> = ({ req, onViewBids }) => {
+const RequirementCard: React.FC<{
+  req: Requirement;
+  onViewDetail: (req: Requirement) => void;
+  onViewBids: (req: Requirement) => void;
+}> = ({ req, onViewDetail, onViewBids }) => {
   const daysLeft = Math.ceil((new Date(req.deadline).getTime() - new Date().getTime()) / 86400000);
 
   return (
     <article
-      className={`bg-white rounded-xl border ${roleColors[req.role] || 'border-gray-100'} p-5 hover:shadow-md transition-shadow`}
+      className={`bg-white rounded-xl border ${roleColors[req.role] || 'border-gray-100'} p-5 hover:shadow-md transition-shadow cursor-pointer`}
       aria-labelledby={`req-${req.id}-title`}
+      onClick={() => onViewDetail(req)}
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && onViewDetail(req)}
+      role="button"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{req.role}</p>
-            {req.category === 'Seasonal' && (
-              <Badge variant="warning" size="sm">Seasonal</Badge>
-            )}
-            {req.category === 'Surge' && (
-              <Badge variant="danger" size="sm">Surge</Badge>
-            )}
+            {req.category === 'Seasonal' && <Badge variant="warning" size="sm">Seasonal</Badge>}
+            {req.category === 'Surge' && <Badge variant="danger" size="sm">Surge</Badge>}
           </div>
           <h3 id={`req-${req.id}-title`} className="text-sm font-bold text-gray-900 leading-snug">{req.title}</h3>
         </div>
@@ -56,7 +60,7 @@ const RequirementCard: React.FC<{ req: Requirement; onViewBids: (req: Requiremen
 
       <p className="text-xs text-gray-600 mb-4 line-clamp-2">{req.description}</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="flex items-center gap-1.5 text-xs text-gray-600">
           <MapPin size={12} className="text-gray-400" aria-hidden="true" />
           <span className="truncate">{req.location}</span>
@@ -85,11 +89,183 @@ const RequirementCard: React.FC<{ req: Requirement; onViewBids: (req: Requiremen
             : <span className="text-xs font-medium text-gray-400">Closed</span>
           }
         </div>
-        <Button variant="outline" size="sm" onClick={() => onViewBids(req)}>
-          View Bids
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={e => { e.stopPropagation(); onViewBids(req); }}
+          >
+            View Bids
+          </Button>
+          <ChevronRight size={14} className="text-gray-400" aria-hidden="true" />
+        </div>
       </div>
     </article>
+  );
+};
+
+// ─── Requirement Detail Drawer ───────────────────────────────────────────────
+
+const RequirementDetail: React.FC<{
+  req: Requirement;
+  onClose: () => void;
+  onViewBids: (req: Requirement) => void;
+}> = ({ req, onClose, onViewBids }) => {
+  const daysLeft = Math.ceil((new Date(req.deadline).getTime() - new Date().getTime()) / 86400000);
+  const pricing = calculatePricing(req.role, req.region, req.headcount);
+  const aiMatches = autoRoute(req.region, req.role, req.headcount).slice(0, 3);
+
+  return (
+    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="req-detail-title">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="ml-auto relative w-full max-w-xl bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white z-10 border-b border-gray-100 p-4 md:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{req.role}</p>
+                {req.category === 'Seasonal' && <Badge variant="warning" size="sm">Seasonal</Badge>}
+                {req.category === 'Surge' && <Badge variant="danger" size="sm">Surge</Badge>}
+              </div>
+              <h2 id="req-detail-title" className="text-base md:text-lg font-bold text-gray-900 leading-tight">{req.title}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <StatusBadge status={req.status} />
+                {daysLeft > 0
+                  ? <span className={`text-xs font-medium ${daysLeft <= 7 ? 'text-red-600' : 'text-gray-500'}`}>{daysLeft} days remaining</span>
+                  : <span className="text-xs text-gray-400">Deadline passed</span>
+                }
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2.5 rounded-xl hover:bg-gray-100 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 md:p-6 space-y-5">
+
+          {/* Description */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Description</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{req.description}</p>
+          </div>
+
+          {/* Key details */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Location', value: req.location, icon: MapPin },
+              { label: 'Region', value: req.region, icon: MapPin },
+              { label: 'Headcount Required', value: req.headcount.toLocaleString(), icon: Users },
+              { label: 'Total Bids', value: req.bids.length.toString(), icon: TrendingUp },
+              { label: 'Posted Date', value: req.postedDate, icon: Calendar },
+              { label: 'Deadline', value: req.deadline, icon: Clock },
+            ].map(item => (
+              <div key={item.label} className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <item.icon size={11} className="text-gray-400" aria-hidden="true" />
+                  <p className="text-xs text-gray-500">{item.label}</p>
+                </div>
+                <p className="text-sm font-semibold text-gray-900">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Budget */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-xs text-gray-500 mb-1">Approved Budget</p>
+            <p className="text-2xl font-bold text-gray-900">₱{req.budget.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              ≈ ₱{Math.round(req.budget / req.headcount).toLocaleString()} per head
+            </p>
+          </div>
+
+          {/* AI Pricing */}
+          <div className="bg-gradient-to-br from-asianow-dark to-asianow-blue rounded-xl p-4 text-white">
+            <div className="flex items-center gap-2 mb-3">
+              <Calculator size={15} aria-hidden="true" />
+              <span className="text-sm font-semibold">AI Pricing Engine</span>
+              <span className="ml-auto text-xs text-white/60">Market rate estimate</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="bg-white/10 rounded-lg p-2.5">
+                <p className="text-xs text-white/60 mb-0.5">Daily / Head</p>
+                <p className="text-sm font-bold">{formatPHP(pricing.dailyBillableRate)}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-2.5">
+                <p className="text-xs text-white/60 mb-0.5">Monthly / Head</p>
+                <p className="text-sm font-bold">{formatPHP(pricing.monthlyRatePerHead)}</p>
+              </div>
+              <div className="bg-asianow-red/30 rounded-lg p-2.5 border border-asianow-red/40">
+                <p className="text-xs text-white/70 mb-0.5">Total Monthly</p>
+                <p className="text-sm font-bold">{formatPHP(pricing.totalMonthlyBudget)}</p>
+              </div>
+            </div>
+            <div className="text-xs text-white/60 space-y-0.5">
+              <p>Base rate ({req.role}): {formatPHP(pricing.baseRate)}/day · Region ({req.region}): {pricing.regionalRate !== pricing.baseRate ? `+${formatPHP(pricing.regionalRate - pricing.baseRate)}` : 'no adj.'}</p>
+              <p>Volume discount: {pricing.volumeDiscountPct > 0 ? `-${pricing.volumeDiscountPct}%` : 'none'} · Employer contributions + agency fee included</p>
+            </div>
+          </div>
+
+          {/* AI Top Matches */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Brain size={14} className="text-asianow-blue" aria-hidden="true" />
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">AI-Recommended Vendors</p>
+            </div>
+            <div className="space-y-2">
+              {aiMatches.map((match, i) => (
+                <div key={match.vendorId} className={`bg-white rounded-lg px-3 py-2.5 border ${match.recommended ? 'border-asianow-blue/40 bg-blue-50/30' : 'border-gray-100'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{match.vendorName}</p>
+                        {match.recommended && <Badge variant="success" size="sm">Top Match</Badge>}
+                        <Badge variant={match.matchTier === 'Excellent' ? 'success' : match.matchTier === 'Good' ? 'info' : 'default'} size="sm">{match.matchTier}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">{match.region} · {match.workerPool.toLocaleString()} workers · Score: {match.totalScore}/100</p>
+                      {i === 0 && match.reasons[0] && (
+                        <p className="text-xs text-asianow-blue mt-1">{match.reasons[0]}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      {['AI', 'Reg', 'Cap'].map((lbl, j) => {
+                        const vals = [match.breakdown.aiScore * 100 / 30, match.breakdown.regionMatch * 100 / 25, match.breakdown.capacity * 100 / 10];
+                        return (
+                          <div key={lbl} className="text-center">
+                            <div className="h-8 w-3 bg-gray-100 rounded-sm overflow-hidden flex flex-col-reverse">
+                              <div className="bg-asianow-blue rounded-sm" style={{ height: `${vals[j]}%` }} />
+                            </div>
+                            <p className="text-[9px] text-gray-400 mt-0.5">{lbl}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4 flex gap-3">
+          <Button
+            className="flex-1 min-h-[44px]"
+            onClick={() => { onClose(); onViewBids(req); }}
+            disabled={req.status === 'Closed'}
+          >
+            View All Bids ({req.bids.length})
+          </Button>
+          <Button variant="outline" onClick={onClose} className="min-h-[44px]">Close</Button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -112,6 +288,7 @@ export const Marketplace: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [showPostModal, setShowPostModal] = useState(false);
   const [bidsReq, setBidsReq] = useState<Requirement | null>(null);
+  const [detailReq, setDetailReq] = useState<Requirement | null>(null);
   const [requirements, setRequirements] = useState(allRequirements);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<PostRequirementForm>();
@@ -145,7 +322,6 @@ export const Marketplace: React.FC = () => {
     setShowPostModal(false);
   };
 
-  // Compute AI-recommended vendors using the auto-routing algorithm
   const getAiRecommendations = (req: Requirement) => {
     return autoRoute(req.region, req.role, req.headcount).slice(0, 3);
   };
@@ -260,12 +436,16 @@ export const Marketplace: React.FC = () => {
       {/* Cards grid */}
       <div>
         <p className="text-sm text-gray-500 mb-4">
-          Showing <strong>{filtered.length}</strong> requirements
+          Showing <strong>{filtered.length}</strong> requirements · Click any card to view full details
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Requirements list">
           {filtered.map(req => (
             <div key={req.id} role="listitem">
-              <RequirementCard req={req} onViewBids={setBidsReq} />
+              <RequirementCard
+                req={req}
+                onViewDetail={setDetailReq}
+                onViewBids={setBidsReq}
+              />
             </div>
           ))}
           {filtered.length === 0 && (
@@ -275,6 +455,15 @@ export const Marketplace: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Requirement Detail Drawer */}
+      {detailReq && (
+        <RequirementDetail
+          req={detailReq}
+          onClose={() => setDetailReq(null)}
+          onViewBids={req => { setDetailReq(null); setBidsReq(req); }}
+        />
+      )}
 
       {/* Bids Modal */}
       {bidsReq && (
@@ -307,7 +496,7 @@ export const Marketplace: React.FC = () => {
                   <div key={match.vendorId} className={`bg-white rounded-lg px-3 py-2.5 border ${match.recommended ? 'border-asianow-blue/40' : 'border-blue-100'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <p className="text-sm font-semibold text-gray-900 truncate">{match.vendorName}</p>
                           {match.recommended && <Badge variant="success" size="sm">Top Match</Badge>}
                           <Badge variant={match.matchTier === 'Excellent' ? 'success' : match.matchTier === 'Good' ? 'info' : 'default'} size="sm">{match.matchTier}</Badge>

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import {
+  Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw,
+  Wallet, ArrowUpRight, ArrowDownLeft, X, FileText, Calendar, Users,
+} from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Badge } from '../components/ui/Badge';
@@ -16,6 +19,171 @@ const manpowerValidationRows = [
   { vendor: 'Northern Luzon Labor Co.', deployed: 130, billed: 145, variance: '+11.5%', status: 'Flagged', statusType: 'flagged' as const },
   { vendor: 'Pasig River Logistics', deployed: 85, billed: 85, variance: '0%', status: 'Validated', statusType: 'ok' as const },
 ];
+
+// ─── Invoice Detail Drawer ───────────────────────────────────────────────────
+
+const InvoiceDetail: React.FC<{
+  invoice: Invoice;
+  onClose: () => void;
+  onFlag: (inv: Invoice) => void;
+}> = ({ invoice, onClose, onFlag }) => {
+  const dailyRate = Math.round(invoice.amount / (invoice.headcount * 26));
+  const lineItems = [
+    { desc: `Basic wage (${invoice.headcount} workers × ₱${dailyRate.toLocaleString()}/day × 26 days)`, amount: Math.round(invoice.amount * 0.72) },
+    { desc: 'SSS Employer Contribution (3.5%)', amount: Math.round(invoice.amount * 0.035) },
+    { desc: 'PhilHealth Employer Share (2%)', amount: Math.round(invoice.amount * 0.02) },
+    { desc: 'Pag-IBIG Employer Contribution (1%)', amount: Math.round(invoice.amount * 0.01) },
+    { desc: '13th Month Provision (accrued)', amount: Math.round(invoice.amount * 0.077) },
+    { desc: 'Agency Service Fee (8%)', amount: Math.round(invoice.amount * 0.08) },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="invoice-detail-title">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="ml-auto relative w-full max-w-xl bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white z-10 border-b border-gray-100 p-4 md:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-xs font-semibold text-asianow-blue mb-1">{invoice.invoiceNumber}</p>
+              <h2 id="invoice-detail-title" className="text-base md:text-lg font-bold text-gray-900 leading-tight">{invoice.vendorName}</h2>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <StatusBadge status={invoice.status} />
+                <span className="text-xs text-gray-500">{invoice.period}</span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2.5 rounded-xl hover:bg-gray-100 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Close invoice detail"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 md:p-6 space-y-5">
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText size={11} className="text-gray-400" aria-hidden="true" />
+                <p className="text-xs text-gray-500">Invoice Total</p>
+              </div>
+              <p className="text-lg font-bold text-gray-900">₱{invoice.amount.toLocaleString()}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Users size={11} className="text-gray-400" aria-hidden="true" />
+                <p className="text-xs text-gray-500">Headcount</p>
+              </div>
+              <p className="text-lg font-bold text-gray-900">{invoice.headcount}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Calendar size={11} className="text-gray-400" aria-hidden="true" />
+                <p className="text-xs text-gray-500">Due Date</p>
+              </div>
+              <p className="text-sm font-bold text-gray-900">{invoice.dueDate}</p>
+            </div>
+          </div>
+
+          {/* Invoice info */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { label: 'Description', value: invoice.description },
+              { label: 'Service Period', value: invoice.period },
+              { label: 'Due Date', value: invoice.dueDate },
+              ...(invoice.paidDate ? [{ label: 'Paid Date', value: invoice.paidDate }] : []),
+            ].map(item => (
+              <div key={item.label} className={`bg-gray-50 rounded-lg p-3 ${item.label === 'Description' ? 'col-span-2' : ''}`}>
+                <p className="text-xs text-gray-500 mb-0.5">{item.label}</p>
+                <p className="text-sm font-medium text-gray-900">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Line items */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Billing Breakdown</p>
+            <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+              <div className="divide-y divide-gray-50">
+                {lineItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-3">
+                    <p className="text-xs text-gray-700 flex-1 pr-4">{item.desc}</p>
+                    <p className="text-xs font-semibold text-gray-900 flex-shrink-0">₱{item.amount.toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-100">
+                <p className="text-sm font-bold text-gray-900">Total Invoice</p>
+                <p className="text-sm font-bold text-gray-900">₱{invoice.amount.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment status */}
+          <div className={`rounded-xl p-4 border ${
+            invoice.status === 'Paid' ? 'bg-green-50 border-green-100' :
+            invoice.status === 'Overdue' ? 'bg-red-50 border-red-100' :
+            invoice.status === 'Disputed' ? 'bg-yellow-50 border-yellow-100' :
+            'bg-gray-50 border-gray-100'
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              {invoice.status === 'Paid' && <CheckCircle size={15} className="text-green-600" aria-hidden="true" />}
+              {invoice.status === 'Overdue' && <AlertTriangle size={15} className="text-red-600" aria-hidden="true" />}
+              {invoice.status === 'Pending' && <Clock size={15} className="text-yellow-600" aria-hidden="true" />}
+              <p className="text-sm font-semibold text-gray-900">Payment Status: {invoice.status}</p>
+            </div>
+            {invoice.status === 'Paid' && invoice.paidDate && (
+              <p className="text-xs text-green-700">Cleared on {invoice.paidDate} via BDO Online Transfer</p>
+            )}
+            {invoice.status === 'Overdue' && (
+              <p className="text-xs text-red-700">Payment overdue — escalation notice sent to vendor on {invoice.dueDate}</p>
+            )}
+            {invoice.status === 'Pending' && (
+              <p className="text-xs text-gray-600">Awaiting payment by {invoice.dueDate}</p>
+            )}
+            {invoice.status === 'Disputed' && (
+              <p className="text-xs text-yellow-700">Under review by billing team — estimated resolution in 3–5 business days</p>
+            )}
+          </div>
+
+          {/* Compliance note */}
+          <div className="bg-asianow-blue/5 rounded-lg p-3 border border-asianow-blue/10">
+            <p className="text-xs text-gray-600">
+              This invoice was validated by the AI Manpower Output Validator. Headcount deployment vs billed
+              headcount variance is within acceptable threshold (&lt;5%).
+            </p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        {(invoice.status === 'Pending' || invoice.status === 'Overdue') && (
+          <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4 flex gap-3">
+            <Button
+              variant="danger"
+              className="flex-1 min-h-[44px]"
+              onClick={() => { onFlag(invoice); onClose(); }}
+            >
+              <AlertTriangle size={14} /> Flag as Disputed
+            </Button>
+            <Button variant="outline" onClick={onClose} className="min-h-[44px]">Close</Button>
+          </div>
+        )}
+        {invoice.status !== 'Pending' && invoice.status !== 'Overdue' && (
+          <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
+            <Button variant="outline" onClick={onClose} className="w-full min-h-[44px]">Close</Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Collection Summary ───────────────────────────────────────────────────────
 
 const CollectionSummary: React.FC = () => {
   const total = allInvoices.reduce((s, i) => s + i.amount, 0);
@@ -59,7 +227,6 @@ const CollectionSummary: React.FC = () => {
         ))}
       </div>
 
-      {/* Reconciliation Status */}
       <Card>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -112,9 +279,7 @@ const ManpowerValidation: React.FC = () => (
               <td className="py-3 px-4 font-medium text-gray-900">{row.vendor}</td>
               <td className="py-3 px-4 text-gray-700">{row.deployed}</td>
               <td className="py-3 px-4 text-gray-700">{row.billed}</td>
-              <td className={`py-3 px-4 font-semibold ${
-                row.statusType === 'flagged' ? 'text-red-600' : 'text-gray-700'
-              }`}>{row.variance}</td>
+              <td className={`py-3 px-4 font-semibold ${row.statusType === 'flagged' ? 'text-red-600' : 'text-gray-700'}`}>{row.variance}</td>
               <td className="py-3 px-4">
                 {row.statusType === 'flagged' ? (
                   <span className="text-red-600 font-semibold text-xs">⚠ Flagged</span>
@@ -176,7 +341,6 @@ const PayoutLedger: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Wallet summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <div className="flex items-start justify-between">
@@ -213,7 +377,6 @@ const PayoutLedger: React.FC = () => {
         </Card>
       </div>
 
-      {/* Payout table */}
       <Card padding={false}>
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -281,6 +444,8 @@ const PayoutLedger: React.FC = () => {
   );
 };
 
+// ─── Main Billing Page ────────────────────────────────────────────────────────
+
 export const Billing: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'invoices' | 'payouts'>('invoices');
   const [search, setSearch] = useState('');
@@ -288,6 +453,7 @@ export const Billing: React.FC = () => {
   const [vendorFilter, setVendorFilter] = useState('All');
   const [invoices, setInvoices] = useState(allInvoices);
   const [flagModal, setFlagModal] = useState<Invoice | null>(null);
+  const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
 
   const vendorNames = [...new Set(allInvoices.map(i => i.vendorName))].sort();
@@ -363,188 +529,201 @@ export const Billing: React.FC = () => {
 
       {activeTab === 'payouts' && <PayoutLedger />}
 
-      {activeTab === 'invoices' && <>
-      <CollectionSummary />
+      {activeTab === 'invoices' && (
+        <>
+          <CollectionSummary />
+          <ManpowerValidation />
 
-      {/* Manpower Output Validation */}
-      <ManpowerValidation />
-
-      {/* Reverse Billing Statements */}
-      <Card>
-        <CardHeader title="Reverse Billing Summary" subtitle="Payments owed from AsiaNow to vendors" />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" role="table" aria-label="Reverse billing statements by vendor">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Vendor', 'Paid (All Time)', 'Pending', 'Disputed', 'Net Exposure'].map(h => (
-                  <th key={h} scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...new Set(allInvoices.map(i => i.vendorName))].slice(0, 8).map(vendorName => {
-                const vInvs = allInvoices.filter(i => i.vendorName === vendorName);
-                const paid = vInvs.filter(i => i.status === 'Paid').reduce((s, i) => s + i.amount, 0);
-                const pending = vInvs.filter(i => i.status === 'Pending').reduce((s, i) => s + i.amount, 0);
-                const disputed = vInvs.filter(i => i.status === 'Disputed').reduce((s, i) => s + i.amount, 0);
-                return (
-                  <tr key={vendorName} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-semibold text-gray-900">{vendorName}</td>
-                    <td className="py-3 px-4 text-green-700 font-medium">₱{paid.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-yellow-700 font-medium">₱{pending.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-red-600 font-medium">₱{disputed.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-bold text-gray-900">₱{(paid + pending + disputed).toLocaleString()}</td>
+          {/* Reverse Billing Statements */}
+          <Card>
+            <CardHeader title="Reverse Billing Summary" subtitle="Payments owed from AsiaNow to vendors" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" role="table" aria-label="Reverse billing statements by vendor">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['Vendor', 'Paid (All Time)', 'Pending', 'Disputed', 'Net Exposure'].map(h => (
+                      <th key={h} scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Filters */}
-      <Card>
-        <div className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-48">
-            <Input
-              placeholder="Search invoices..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              icon={<Search size={14} />}
-              aria-label="Search invoices"
-            />
-          </div>
-          <Select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            options={[
-              { value: 'All', label: 'All Statuses' },
-              { value: 'Paid', label: 'Paid' },
-              { value: 'Pending', label: 'Pending' },
-              { value: 'Disputed', label: 'Disputed' },
-              { value: 'Overdue', label: 'Overdue' },
-            ]}
-            aria-label="Filter by status"
-          />
-          <Select
-            value={vendorFilter}
-            onChange={e => setVendorFilter(e.target.value)}
-            options={[
-              { value: 'All', label: 'All Vendors' },
-              ...vendorNames.map(v => ({ value: v, label: v })),
-            ]}
-            aria-label="Filter by vendor"
-          />
-        </div>
-      </Card>
-
-      {/* Invoice Table */}
-      <Card padding={false}>
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            Showing <strong>{filtered.length}</strong> invoices · Total: <strong>₱{filtered.reduce((s, i) => s + i.amount, 0).toLocaleString()}</strong>
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" role="table" aria-label="Invoice list">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Invoice #</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Vendor</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Description</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Headcount</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Period</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Amount</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Due Date</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Status</th>
-                <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(inv => (
-                <tr key={inv.id} className={`border-b border-gray-50 hover:bg-gray-50 table-row-hover ${inv.status === 'Overdue' ? 'bg-red-50/40' : inv.status === 'Disputed' ? 'bg-yellow-50/40' : ''}`}>
-                  <td className="py-3 px-4">
-                    <p className="font-mono text-xs font-semibold text-asianow-blue">{inv.invoiceNumber}</p>
-                  </td>
-                  <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{inv.vendorName}</td>
-                  <td className="py-3 px-4 text-gray-600 max-w-xs hidden lg:table-cell">
-                    <p className="truncate">{inv.description}</p>
-                  </td>
-                  <td className="py-3 px-4 text-center text-gray-700 hidden md:table-cell">{inv.headcount}</td>
-                  <td className="py-3 px-4 text-gray-500 whitespace-nowrap hidden md:table-cell">{inv.period}</td>
-                  <td className="py-3 px-4 font-bold text-gray-900 whitespace-nowrap">₱{inv.amount.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-gray-500 whitespace-nowrap hidden sm:table-cell">{inv.dueDate}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-col gap-1">
-                      <StatusBadge status={inv.status} />
-                      {inv.paidDate && (
-                        <p className="text-xs text-gray-400">Paid {inv.paidDate}</p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    {inv.status === 'Pending' || inv.status === 'Overdue' ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleFlagDispute(inv)}
-                        aria-label={`Flag invoice ${inv.invoiceNumber} as disputed`}
-                      >
-                        Flag
-                      </Button>
-                    ) : inv.status === 'Disputed' ? (
-                      <Badge variant="danger">Under Review</Badge>
-                    ) : (
-                      <CheckCircle size={16} className="text-green-500" aria-label="Paid" />
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="py-10 text-center text-gray-400">No invoices match your filters.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Dispute modal */}
-      <Modal
-        isOpen={!!flagModal}
-        onClose={() => setFlagModal(null)}
-        title="Flag Invoice as Disputed"
-        size="sm"
-      >
-        {flagModal && (
-          <>
-            <div className="bg-gray-50 rounded-lg p-3 mb-4">
-              <p className="text-xs text-gray-500">Invoice</p>
-              <p className="font-semibold text-gray-900">{flagModal.invoiceNumber}</p>
-              <p className="text-sm text-gray-600">{flagModal.vendorName} · ₱{flagModal.amount.toLocaleString()}</p>
+                </thead>
+                <tbody>
+                  {[...new Set(allInvoices.map(i => i.vendorName))].slice(0, 8).map(vendorName => {
+                    const vInvs = allInvoices.filter(i => i.vendorName === vendorName);
+                    const paid = vInvs.filter(i => i.status === 'Paid').reduce((s, i) => s + i.amount, 0);
+                    const pending = vInvs.filter(i => i.status === 'Pending').reduce((s, i) => s + i.amount, 0);
+                    const disputed = vInvs.filter(i => i.status === 'Disputed').reduce((s, i) => s + i.amount, 0);
+                    return (
+                      <tr key={vendorName} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-3 px-4 font-semibold text-gray-900">{vendorName}</td>
+                        <td className="py-3 px-4 text-green-700 font-medium">₱{paid.toLocaleString()}</td>
+                        <td className="py-3 px-4 text-yellow-700 font-medium">₱{pending.toLocaleString()}</td>
+                        <td className="py-3 px-4 text-red-600 font-medium">₱{disputed.toLocaleString()}</td>
+                        <td className="py-3 px-4 font-bold text-gray-900">₱{(paid + pending + disputed).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div className="mb-4">
-              <label htmlFor="dispute-reason" className="text-sm font-medium text-gray-700 mb-1 block">Dispute Reason</label>
-              <textarea
-                id="dispute-reason"
-                className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue"
-                rows={3}
-                placeholder="Describe the issue..."
-                value={disputeReason}
-                onChange={e => setDisputeReason(e.target.value)}
+          </Card>
+
+          {/* Filters */}
+          <Card>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex-1 min-w-48">
+                <Input
+                  placeholder="Search invoices..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  icon={<Search size={14} />}
+                  aria-label="Search invoices"
+                />
+              </div>
+              <Select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'Paid', label: 'Paid' },
+                  { value: 'Pending', label: 'Pending' },
+                  { value: 'Disputed', label: 'Disputed' },
+                  { value: 'Overdue', label: 'Overdue' },
+                ]}
+                aria-label="Filter by status"
+              />
+              <Select
+                value={vendorFilter}
+                onChange={e => setVendorFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Vendors' },
+                  ...vendorNames.map(v => ({ value: v, label: v })),
+                ]}
+                aria-label="Filter by vendor"
               />
             </div>
-            <div className="flex gap-3">
-              <Button variant="danger" className="flex-1" onClick={handleSubmitDispute}>
-                Confirm Dispute
-              </Button>
-              <Button variant="outline" onClick={() => setFlagModal(null)}>Cancel</Button>
+          </Card>
+
+          {/* Invoice Table */}
+          <Card padding={false}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Showing <strong>{filtered.length}</strong> invoices · Total: <strong>₱{filtered.reduce((s, i) => s + i.amount, 0).toLocaleString()}</strong>
+              </p>
+              <p className="text-xs text-gray-400 hidden sm:block">Click any row to view full invoice</p>
             </div>
-          </>
-        )}
-      </Modal>
-      </>}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" role="table" aria-label="Invoice list">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Invoice #</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Vendor</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Description</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Headcount</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Period</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Amount</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Due Date</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Status</th>
+                    <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(inv => (
+                    <tr
+                      key={inv.id}
+                      className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${inv.status === 'Overdue' ? 'bg-red-50/40' : inv.status === 'Disputed' ? 'bg-yellow-50/40' : ''}`}
+                      onClick={() => setDetailInvoice(inv)}
+                      tabIndex={0}
+                      onKeyDown={e => e.key === 'Enter' && setDetailInvoice(inv)}
+                      role="button"
+                      aria-label={`View invoice ${inv.invoiceNumber}`}
+                    >
+                      <td className="py-3 px-4">
+                        <p className="font-mono text-xs font-semibold text-asianow-blue">{inv.invoiceNumber}</p>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{inv.vendorName}</td>
+                      <td className="py-3 px-4 text-gray-600 max-w-xs hidden lg:table-cell">
+                        <p className="truncate">{inv.description}</p>
+                      </td>
+                      <td className="py-3 px-4 text-center text-gray-700 hidden md:table-cell">{inv.headcount}</td>
+                      <td className="py-3 px-4 text-gray-500 whitespace-nowrap hidden md:table-cell">{inv.period}</td>
+                      <td className="py-3 px-4 font-bold text-gray-900 whitespace-nowrap">₱{inv.amount.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-gray-500 whitespace-nowrap hidden sm:table-cell">{inv.dueDate}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-1">
+                          <StatusBadge status={inv.status} />
+                          {inv.paidDate && (
+                            <p className="text-xs text-gray-400">Paid {inv.paidDate}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {inv.status === 'Pending' || inv.status === 'Overdue' ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={e => { e.stopPropagation(); handleFlagDispute(inv); }}
+                            aria-label={`Flag invoice ${inv.invoiceNumber} as disputed`}
+                          >
+                            Flag
+                          </Button>
+                        ) : inv.status === 'Disputed' ? (
+                          <Badge variant="danger">Under Review</Badge>
+                        ) : (
+                          <CheckCircle size={16} className="text-green-500" aria-label="Paid" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-10 text-center text-gray-400">No invoices match your filters.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Dispute modal */}
+          <Modal isOpen={!!flagModal} onClose={() => setFlagModal(null)} title="Flag Invoice as Disputed" size="sm">
+            {flagModal && (
+              <>
+                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-gray-500">Invoice</p>
+                  <p className="font-semibold text-gray-900">{flagModal.invoiceNumber}</p>
+                  <p className="text-sm text-gray-600">{flagModal.vendorName} · ₱{flagModal.amount.toLocaleString()}</p>
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="dispute-reason" className="text-sm font-medium text-gray-700 mb-1 block">Dispute Reason</label>
+                  <textarea
+                    id="dispute-reason"
+                    className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue"
+                    rows={3}
+                    placeholder="Describe the issue..."
+                    value={disputeReason}
+                    onChange={e => setDisputeReason(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="danger" className="flex-1" onClick={handleSubmitDispute}>
+                    Confirm Dispute
+                  </Button>
+                  <Button variant="outline" onClick={() => setFlagModal(null)}>Cancel</Button>
+                </div>
+              </>
+            )}
+          </Modal>
+        </>
+      )}
+
+      {/* Invoice Detail Drawer */}
+      {detailInvoice && (
+        <InvoiceDetail
+          invoice={detailInvoice}
+          onClose={() => setDetailInvoice(null)}
+          onFlag={inv => { setDetailInvoice(null); handleFlagDispute(inv); }}
+        />
+      )}
     </div>
   );
 };
