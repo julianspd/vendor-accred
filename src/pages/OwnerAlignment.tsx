@@ -70,8 +70,8 @@ const sections: AlignmentSection[] = [
       { id: '4.6', text: 'Post New Requirement modal with full form validation', status: 'done' },
       { id: '4.7', text: 'Search + 4-filter bar (region, role, status, category)', status: 'done' },
       { id: '4.8', text: 'Deadline countdown with urgent color coding (≤7 days = red)', status: 'done' },
-      { id: '4.9', text: 'Vendor bid submission form (vendors submit bids from their portal)', status: 'planned' },
-      { id: '4.10', text: 'Bid acceptance / award flow with vendor notification', status: 'planned' },
+      { id: '4.9', text: 'Vendor bid submission form (vendors submit bids from their portal)', status: 'done' },
+      { id: '4.10', text: 'Bid acceptance / award flow with vendor notification', status: 'done' },
     ],
   },
   {
@@ -123,7 +123,7 @@ const sections: AlignmentSection[] = [
       { id: '8.3', text: 'Audit log with full event history', status: 'done' },
       { id: '8.4', text: 'Violation severity classification (Critical, High, Medium)', status: 'done' },
       { id: '8.5', text: 'Upcoming audit schedule with countdown', status: 'done' },
-      { id: '8.6', text: 'Automated compliance alerts triggered by document expiry', status: 'next' },
+      { id: '8.6', text: 'Automated compliance alerts triggered by document expiry', status: 'done' },
       { id: '8.7', text: 'DOLE online portal API integration for real-time status', status: 'planned' },
     ],
   },
@@ -137,7 +137,7 @@ const sections: AlignmentSection[] = [
       { id: '9.5', text: 'Manpower output validator — flags invoices with >5% headcount variance', status: 'done' },
       { id: '9.6', text: 'AI accreditation score (0–100) per vendor with risk classification', status: 'done' },
       { id: '9.7', text: 'Real ML model for vendor scoring (trained on historical data)', status: 'planned' },
-      { id: '9.8', text: 'Predictive demand forecasting for seasonal surge requirements', status: 'planned' },
+      { id: '9.8', text: 'Predictive demand forecasting for seasonal surge requirements', status: 'done' },
     ],
   },
   {

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MapPin, Users, Calendar, DollarSign, Plus, Filter, Search,
-  Brain, Calculator, Clock, ChevronRight, TrendingUp, X,
+  Brain, Calculator, Clock, ChevronRight, TrendingUp, X, CheckCircle,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -290,6 +290,23 @@ export const Marketplace: React.FC = () => {
   const [bidsReq, setBidsReq] = useState<Requirement | null>(null);
   const [detailReq, setDetailReq] = useState<Requirement | null>(null);
   const [requirements, setRequirements] = useState(allRequirements);
+  const [awardBanner, setAwardBanner] = useState<string | null>(null);
+  const awardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Bid submission form state
+  const [bidVendorName, setBidVendorName] = useState('');
+  const [bidRate, setBidRate] = useState('');
+  const [bidHeadcount, setBidHeadcount] = useState('');
+  const [bidNotes, setBidNotes] = useState('');
+
+  // Auto-dismiss award banner after 3 seconds
+  useEffect(() => {
+    if (awardBanner) {
+      if (awardTimerRef.current) clearTimeout(awardTimerRef.current);
+      awardTimerRef.current = setTimeout(() => setAwardBanner(null), 3000);
+    }
+    return () => { if (awardTimerRef.current) clearTimeout(awardTimerRef.current); };
+  }, [awardBanner]);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<PostRequirementForm>();
   const watchedRole = useWatch({ control, name: 'role' });
@@ -326,8 +343,69 @@ export const Marketplace: React.FC = () => {
     return autoRoute(req.region, req.role, req.headcount).slice(0, 3);
   };
 
+  const handleSubmitBid = () => {
+    if (!bidsReq || !bidVendorName.trim() || !bidRate || !bidHeadcount) return;
+    const newBid = {
+      vendorId: `vendor-${Date.now()}`,
+      vendorName: bidVendorName.trim(),
+      proposedRate: Number(bidRate),
+      headcount: Number(bidHeadcount),
+      submittedDate: new Date().toISOString().split('T')[0],
+      status: 'Pending' as const,
+    };
+    const updatedReq = { ...bidsReq, bids: [...bidsReq.bids, newBid] };
+    setRequirements(prev => prev.map(r => r.id === bidsReq.id ? updatedReq : r));
+    setBidsReq(updatedReq);
+    setBidVendorName('');
+    setBidRate('');
+    setBidHeadcount('');
+    setBidNotes('');
+  };
+
+  const handleAcceptBid = (bidIndex: number) => {
+    if (!bidsReq) return;
+    const acceptedVendor = bidsReq.bids[bidIndex].vendorName;
+    const updatedBids = bidsReq.bids.map((b, i) => ({
+      ...b,
+      status: i === bidIndex ? ('Accepted' as const) : ('Rejected' as const),
+    }));
+    const updatedReq: Requirement = { ...bidsReq, bids: updatedBids, status: 'Filled' };
+    setRequirements(prev => prev.map(r => r.id === bidsReq.id ? updatedReq : r));
+    setBidsReq(null);
+    setAwardBanner(`Awarded to ${acceptedVendor}`);
+  };
+
+  const handleDeclineBid = (bidIndex: number) => {
+    if (!bidsReq) return;
+    const updatedBids = bidsReq.bids.map((b, i) =>
+      i === bidIndex ? { ...b, status: 'Rejected' as const } : b,
+    );
+    const updatedReq = { ...bidsReq, bids: updatedBids };
+    setRequirements(prev => prev.map(r => r.id === bidsReq.id ? updatedReq : r));
+    setBidsReq(updatedReq);
+  };
+
   return (
     <div className="space-y-6" aria-label="Requirement Marketplace">
+      {/* Award success banner */}
+      {awardBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm font-medium shadow-sm"
+        >
+          <CheckCircle size={16} className="text-green-600 flex-shrink-0" aria-hidden="true" />
+          <span>{awardBanner}</span>
+          <button
+            onClick={() => setAwardBanner(null)}
+            className="ml-auto text-green-600 hover:text-green-800"
+            aria-label="Dismiss"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Requirement Marketplace</h1>
@@ -539,7 +617,7 @@ export const Marketplace: React.FC = () => {
                 <table className="w-full text-sm" role="table" aria-label="Vendor bids">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {['Vendor', 'Proposed Rate', 'Headcount', 'Submitted', 'Status'].map(h => (
+                      {['Vendor', 'Proposed Rate', 'Headcount', 'Submitted', 'Status', 'Actions'].map(h => (
                         <th key={h} scope="col" className="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>
                       ))}
                     </tr>
@@ -552,10 +630,104 @@ export const Marketplace: React.FC = () => {
                         <td className="py-3 px-3 text-gray-700">{bid.headcount}</td>
                         <td className="py-3 px-3 text-gray-500 text-xs">{bid.submittedDate}</td>
                         <td className="py-3 px-3"><StatusBadge status={bid.status} /></td>
+                        <td className="py-3 px-3">
+                          {bid.status === 'Pending' && (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAcceptBid(i)}
+                                aria-label={`Accept bid from ${bid.vendorName}`}
+                                className="border-green-500 text-green-700 hover:bg-green-50"
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeclineBid(i)}
+                                aria-label={`Decline bid from ${bid.vendorName}`}
+                              >
+                                Decline
+                              </Button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Submit Bid section */}
+            {(bidsReq.status === 'Open' || bidsReq.status === 'In Progress') && (
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Submit a Bid</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="bid-vendor-name">
+                      Vendor Name
+                    </label>
+                    <input
+                      id="bid-vendor-name"
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg text-sm text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue"
+                      placeholder="Company name"
+                      value={bidVendorName}
+                      onChange={e => setBidVendorName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="bid-rate">
+                      Proposed Rate (₱)
+                    </label>
+                    <input
+                      id="bid-rate"
+                      type="number"
+                      min={1}
+                      className="w-full border border-gray-300 rounded-lg text-sm text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue"
+                      placeholder="e.g. 25000"
+                      value={bidRate}
+                      onChange={e => setBidRate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="bid-headcount">
+                      Headcount
+                    </label>
+                    <input
+                      id="bid-headcount"
+                      type="number"
+                      min={1}
+                      className="w-full border border-gray-300 rounded-lg text-sm text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue"
+                      placeholder="e.g. 50"
+                      value={bidHeadcount}
+                      onChange={e => setBidHeadcount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="bid-notes">
+                      Notes <span className="text-gray-400 font-normal">(optional)</span>
+                    </label>
+                    <textarea
+                      id="bid-notes"
+                      className="w-full border border-gray-300 rounded-lg text-sm text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-asianow-blue resize-none"
+                      rows={2}
+                      placeholder="Any additional notes..."
+                      value={bidNotes}
+                      onChange={e => setBidNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <Button
+                    onClick={handleSubmitBid}
+                    disabled={!bidVendorName.trim() || !bidRate || !bidHeadcount}
+                  >
+                    Submit Bid
+                  </Button>
+                </div>
               </div>
             )}
           </div>

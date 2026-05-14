@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Shield, AlertTriangle, CheckCircle, Clock, FileText } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Shield, AlertTriangle, CheckCircle, Clock, FileText, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Badge } from '../components/ui/Badge';
@@ -19,6 +19,169 @@ const statutoryChecklist = [
   { item: 'Data Privacy Act (RA 10173) compliance', status: true, note: 'DPO registered, privacy policy updated' },
   { item: 'Anti-Red Tape Act compliance', status: true, note: 'Online accreditation portal active' },
 ];
+
+type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+interface ComplianceAlert {
+  vendorId: string;
+  vendorName: string;
+  docName: string;
+  expiryDate: string;
+  daysLeft: number;
+  severity: AlertSeverity;
+}
+
+const ALERT_VISIBLE_COUNT = 5;
+
+const severityConfig: Record<AlertSeverity, { label: string; bg: string; text: string; border: string }> = {
+  critical: { label: 'Critical', bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-200' },
+  high:     { label: 'High',     bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  medium:   { label: 'Medium',   bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' },
+  low:      { label: 'Low',      bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200' },
+};
+
+const severityOrder: AlertSeverity[] = ['critical', 'high', 'medium', 'low'];
+
+function buildAlerts(): ComplianceAlert[] {
+  const now = new Date();
+  const alerts: ComplianceAlert[] = [];
+
+  for (const vendor of vendors) {
+    if (vendor.status !== 'Accredited' && vendor.status !== 'Pending') continue;
+    for (const doc of vendor.documents) {
+      if (!doc.expiryDate) continue;
+      const daysLeft = Math.ceil((new Date(doc.expiryDate).getTime() - now.getTime()) / 86400000);
+      let severity: AlertSeverity | null = null;
+      if (daysLeft < 0)        severity = 'critical';
+      else if (daysLeft <= 30) severity = 'high';
+      else if (daysLeft <= 60) severity = 'medium';
+      else if (daysLeft <= 90) severity = 'low';
+      if (severity) {
+        alerts.push({ vendorId: vendor.id, vendorName: vendor.companyName, docName: doc.name, expiryDate: doc.expiryDate, daysLeft, severity });
+      }
+    }
+  }
+
+  alerts.sort((a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity) || a.daysLeft - b.daysLeft);
+  return alerts;
+}
+
+function ActiveAlertsPanel() {
+  const alerts = useMemo(() => buildAlerts(), []);
+  const [expanded, setExpanded] = useState(false);
+  const [notified, setNotified] = useState<Set<string>>(new Set());
+
+  const visible = expanded ? alerts : alerts.slice(0, ALERT_VISIBLE_COUNT);
+  const hiddenCount = alerts.length - ALERT_VISIBLE_COUNT;
+
+  function handleNotify(key: string) {
+    setNotified(prev => new Set(prev).add(key));
+    setTimeout(() => {
+      setNotified(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }, 3000);
+  }
+
+  if (alerts.length === 0) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-5 py-4">
+        <CheckCircle size={20} className="text-green-600 flex-shrink-0" aria-hidden="true" />
+        <p className="text-sm font-medium text-green-800">All documents current — no alerts</p>
+      </div>
+    );
+  }
+
+  return (
+    <Card padding={false}>
+      {/* Panel header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2.5">
+          <Bell size={18} className="text-asianow-red flex-shrink-0" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Active Alerts</h2>
+            <p className="text-xs text-gray-500">Document expiry alerts across accredited and pending vendors</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+          {alerts.length} alert{alerts.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Alert rows */}
+      <div className="divide-y divide-gray-50" role="list" aria-label="Compliance alerts">
+        {visible.map((alert) => {
+          const key = `${alert.vendorId}-${alert.docName}`;
+          const cfg = severityConfig[alert.severity];
+          const isSent = notified.has(key);
+          return (
+            <div
+              key={key}
+              role="listitem"
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3.5 hover:bg-gray-50 transition-colors"
+            >
+              {/* Severity badge */}
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text} border ${cfg.border} w-[72px] justify-center flex-shrink-0`}>
+                {cfg.label}
+              </span>
+
+              {/* Vendor & document */}
+              <div className="flex-1 min-w-[180px]">
+                <p className="text-sm font-semibold text-gray-900 leading-tight">{alert.vendorName}</p>
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                  <FileText size={11} aria-hidden="true" />
+                  {alert.docName}
+                </p>
+              </div>
+
+              {/* Expiry info */}
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs text-gray-500">Expiry: {alert.expiryDate}</p>
+                <p className={`text-xs font-semibold mt-0.5 ${alert.daysLeft < 0 ? 'text-red-600' : cfg.text}`}>
+                  {alert.daysLeft < 0 ? 'EXPIRED' : `${alert.daysLeft} day${alert.daysLeft !== 1 ? 's' : ''} remaining`}
+                </p>
+              </div>
+
+              {/* Notify button */}
+              {isSent ? (
+                <span className="text-xs font-semibold text-green-600 w-28 text-center flex-shrink-0">
+                  Sent ✓
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleNotify(key)}
+                  className="w-28 flex-shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-asianow-blue focus:ring-offset-1"
+                  aria-label={`Notify ${alert.vendorName} about ${alert.docName}`}
+                >
+                  Notify Vendor
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Show more / show less toggle */}
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="w-full flex items-center justify-center gap-1.5 py-3 border-t border-gray-100 text-xs font-medium text-asianow-blue hover:bg-blue-50 transition-colors rounded-b-xl focus:outline-none focus:ring-2 focus:ring-asianow-blue focus:ring-offset-1"
+          aria-expanded={expanded}
+        >
+          {expanded ? (
+            <><ChevronUp size={14} aria-hidden="true" /> Show less</>
+          ) : (
+            <><ChevronDown size={14} aria-hidden="true" /> Show {hiddenCount} more</>
+          )}
+        </button>
+      )}
+    </Card>
+  );
+}
 
 export const Compliance: React.FC = () => {
   const [docFilter, setDocFilter] = useState('All');
@@ -42,6 +205,9 @@ export const Compliance: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900">Compliance</h1>
         <p className="text-sm text-gray-500 mt-1">Document expiry tracking, compliance scores, and audit logs</p>
       </div>
+
+      {/* Active Alerts — item 8.6 */}
+      <ActiveAlertsPanel />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -3,13 +3,14 @@ import { AlertTriangle, Brain, TrendingUp, Eye, CheckCircle } from 'lucide-react
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, AreaChart, Area, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, ReferenceLine,
 } from 'recharts';
 import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { fraudAlerts, deploymentTrend, vendorPerformance } from '../data/analytics';
+import { deployments } from '../data/deployments';
 
 const demandForecast = [
   { month: 'Jun 2026', ncr: 780, cebu: 190, davao: 130, total: 1270 },
@@ -40,6 +41,90 @@ export const Analytics: React.FC = () => {
   const resolveAlert = (id: string) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'Resolved' as const } : a));
   };
+
+  // --- 9.8 Demand Forecast: compute from deployment data ---
+  const RIDER_ROLES = new Set(['Delivery Rider', 'Driver']);
+  const WAREHOUSE_ROLES = new Set(['Warehouse Staff', 'Sorter', 'Inventory Clerk']);
+  const DISPATCH_ROLES = new Set(['Dispatch Officer', 'Customer Service']);
+
+  // Bucket each deployment into its start month (2026-01 … 2026-04 = 4 complete months)
+  const historicalBuckets: Record<string, { Riders: number; Warehouse: number; Dispatch: number }> = {};
+  const HIST_MONTHS = ['2026-01', '2026-02', '2026-03', '2026-04'];
+  HIST_MONTHS.forEach(m => { historicalBuckets[m] = { Riders: 0, Warehouse: 0, Dispatch: 0 }; });
+
+  deployments.forEach(d => {
+    const monthKey = d.startDate.slice(0, 7);
+    if (!HIST_MONTHS.includes(monthKey)) return;
+    if (RIDER_ROLES.has(d.role)) historicalBuckets[monthKey].Riders += d.headcount;
+    else if (WAREHOUSE_ROLES.has(d.role)) historicalBuckets[monthKey].Warehouse += d.headcount;
+    else if (DISPATCH_ROLES.has(d.role)) historicalBuckets[monthKey].Dispatch += d.headcount;
+  });
+
+  // Simple linear regression helper
+  const linearProject = (values: number[], stepsAhead: number[]): number[] => {
+    const n = values.length;
+    const xs = values.map((_, i) => i);
+    const sx = xs.reduce((a, b) => a + b, 0);
+    const sy = values.reduce((a, b) => a + b, 0);
+    const sxy = xs.reduce((acc, x, i) => acc + x * values[i], 0);
+    const sx2 = xs.reduce((acc, x) => acc + x * x, 0);
+    const denom = n * sx2 - sx * sx;
+    const slope = denom !== 0 ? (n * sxy - sx * sy) / denom : 0;
+    const intercept = (sy - slope * sx) / n;
+    return stepsAhead.map(step => Math.max(0, Math.round(intercept + slope * step)));
+  };
+
+  const histValues = (key: 'Riders' | 'Warehouse' | 'Dispatch') =>
+    HIST_MONTHS.map(m => historicalBuckets[m][key]);
+
+  const forecastSteps = [4, 5, 6]; // steps 4, 5, 6 = Jun, Jul, Aug
+  const projRiders    = linearProject(histValues('Riders'),   forecastSteps);
+  const projWarehouse = linearProject(histValues('Warehouse'), forecastSteps);
+  const projDispatch  = linearProject(histValues('Dispatch'),  forecastSteps);
+
+  const MONTH_LABELS: Record<string, string> = {
+    '2026-01': 'Jan', '2026-02': 'Feb', '2026-03': 'Mar', '2026-04': 'Apr',
+  };
+  const FORECAST_LABELS = ['Jun', 'Jul', 'Aug'];
+
+  // Build unified chart data with split keys:
+  //   *Hist keys hold values for Jan–Apr, null for Jun–Aug (solid lines)
+  //   *Proj keys hold null for Jan–Apr, values for Jun–Aug (dashed lines)
+  // The Apr→Jun bridge: Apr point also appears in *Proj so lines connect seamlessly.
+  const combinedForecastData = [
+    ...HIST_MONTHS.map((m, idx) => ({
+      month: MONTH_LABELS[m],
+      RidersHist:    historicalBuckets[m].Riders,
+      WarehouseHist: historicalBuckets[m].Warehouse,
+      DispatchHist:  historicalBuckets[m].Dispatch,
+      // Give the last historical point to *Proj as well so the line bridges the gap
+      RidersProj:    idx === HIST_MONTHS.length - 1 ? historicalBuckets[m].Riders    : null,
+      WarehouseProj: idx === HIST_MONTHS.length - 1 ? historicalBuckets[m].Warehouse : null,
+      DispatchProj:  idx === HIST_MONTHS.length - 1 ? historicalBuckets[m].Dispatch  : null,
+    })),
+    ...FORECAST_LABELS.map((label, i) => ({
+      month: label,
+      RidersHist:    null,
+      WarehouseHist: null,
+      DispatchHist:  null,
+      RidersProj:    projRiders[i],
+      WarehouseProj: projWarehouse[i],
+      DispatchProj:  projDispatch[i],
+    })),
+  ];
+
+  // KPI cards
+  const junTotal = projRiders[0] + projWarehouse[0] + projDispatch[0];
+  const aprTotal = historicalBuckets['2026-04'].Riders
+    + historicalBuckets['2026-04'].Warehouse
+    + historicalBuckets['2026-04'].Dispatch;
+  const momGrowthPct = aprTotal > 0 ? ((junTotal - aprTotal) / aprTotal * 100).toFixed(1) : '0.0';
+  const junRoleEntries: [string, number][] = [
+    ['Riders', projRiders[0]],
+    ['Warehouse', projWarehouse[0]],
+    ['Dispatch', projDispatch[0]],
+  ];
+  const highestDemandRole = junRoleEntries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
 
   return (
     <div className="space-y-6" aria-label="AI Analytics">
@@ -170,6 +255,121 @@ export const Analytics: React.FC = () => {
               <Bar dataKey="score" name="Score" fill="#1A5FA8" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* 9.8 — Predictive Demand Forecasting (role-based, computed from deployment history) */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Demand Forecast</h2>
+        <p className="text-sm text-gray-500 mb-4">Predicted headcount by role category — linear trend from 4-month historical data</p>
+
+        {/* Forecast KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+          <Card>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Jun 2026 — Predicted Total</p>
+            <p className="text-3xl font-bold text-asianow-blue">{junTotal.toLocaleString()}</p>
+            <p className="text-xs text-gray-400 mt-1">workers across all roles</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Month-over-Month Growth</p>
+            <p className={`text-3xl font-bold ${parseFloat(momGrowthPct) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {parseFloat(momGrowthPct) >= 0 ? '+' : ''}{momGrowthPct}%
+            </p>
+            <p className="text-xs text-gray-400 mt-1">vs Apr 2026 (last complete month)</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Highest-Demand Role — Jun</p>
+            <p className="text-3xl font-bold text-asianow-dark">{highestDemandRole}</p>
+            <p className="text-xs text-gray-400 mt-1">{junRoleEntries.find(([k]) => k === highestDemandRole)?.[1].toLocaleString()} projected workers</p>
+          </Card>
+        </div>
+
+        {/* Forecast Chart */}
+        <Card>
+          <div className="flex items-start justify-between mb-2">
+            <CardHeader
+              title="Role-Based Headcount Forecast"
+              subtitle="Jan – Apr historical · Jun – Aug projected"
+            />
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={combinedForecastData} margin={{ top: 10, right: 16, left: -20, bottom: 5 }}>
+              <defs>
+                <linearGradient id="gradRidersH" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#E31E24" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#E31E24" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradWarehouseH" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#1A5FA8" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#1A5FA8" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradDispatchH" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0D3B73" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#0D3B73" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradRidersP" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#E31E24" stopOpacity={0.07} />
+                  <stop offset="95%" stopColor="#E31E24" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradWarehouseP" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#1A5FA8" stopOpacity={0.07} />
+                  <stop offset="95%" stopColor="#1A5FA8" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradDispatchP" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0D3B73" stopOpacity={0.07} />
+                  <stop offset="95%" stopColor="#0D3B73" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                formatter={(value: number, name: string) => {
+                  const isProj = name.includes('(proj)');
+                  const label = isProj ? name.replace(' (proj)', '') : name;
+                  return [`${value} workers${isProj ? ' (projected)' : ''}`, label];
+                }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 12 }}
+                formatter={(value: string) => value.replace(' (proj)', '')}
+              />
+              {/* Historical solid lines — null for Jun–Aug */}
+              <Area connectNulls={false} type="monotone" dataKey="RidersHist"
+                stroke="#E31E24" fill="url(#gradRidersH)" strokeWidth={2}
+                name="Riders" legendType="line" />
+              <Area connectNulls={false} type="monotone" dataKey="WarehouseHist"
+                stroke="#1A5FA8" fill="url(#gradWarehouseH)" strokeWidth={2}
+                name="Warehouse" legendType="line" />
+              <Area connectNulls={false} type="monotone" dataKey="DispatchHist"
+                stroke="#0D3B73" fill="url(#gradDispatchH)" strokeWidth={2}
+                name="Dispatch" legendType="line" />
+              {/* Projected dashed lines — null for Jan–Mar, bridges from Apr */}
+              <Area connectNulls={false} type="monotone" dataKey="RidersProj"
+                stroke="#E31E24" fill="url(#gradRidersP)" strokeWidth={2}
+                strokeDasharray="5 5" strokeOpacity={0.7}
+                name="Riders (proj)" legendType="none" />
+              <Area connectNulls={false} type="monotone" dataKey="WarehouseProj"
+                stroke="#1A5FA8" fill="url(#gradWarehouseP)" strokeWidth={2}
+                strokeDasharray="5 5" strokeOpacity={0.7}
+                name="Warehouse (proj)" legendType="none" />
+              <Area connectNulls={false} type="monotone" dataKey="DispatchProj"
+                stroke="#0D3B73" fill="url(#gradDispatchP)" strokeWidth={2}
+                strokeDasharray="5 5" strokeOpacity={0.7}
+                name="Dispatch (proj)" legendType="none" />
+              {/* Vertical divider at the forecast boundary */}
+              <ReferenceLine
+                x="Apr"
+                stroke="#9ca3af"
+                strokeDasharray="4 4"
+                label={{ value: 'Forecast →', position: 'insideTopRight', fontSize: 11, fill: '#6b7280' }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-gray-400 mt-3 text-center italic">
+            Forecast based on linear trend from 4-month historical data (Jan – Apr 2026). May 2026 excluded as month is in progress.
+          </p>
         </Card>
       </div>
 
