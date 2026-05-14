@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ShoppingBag, Truck, Receipt,
-  BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Zap,
+  BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Zap, KeyRound,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -76,6 +76,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
           </NavLink>
         ))}
       </nav>
+
+      {/* Owner Mode */}
+      <div className="px-2 pb-2">
+        <NavLink
+          to="/owner"
+          onClick={onMobileClose}
+          aria-label="Owner Alignment"
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 border ${
+              isActive
+                ? 'bg-amber-500 text-white border-amber-400 shadow-sm'
+                : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border-amber-500/30'
+            }`
+          }
+        >
+          <KeyRound size={16} aria-hidden="true" className="flex-shrink-0" />
+          {!collapsed && <span className="truncate text-xs font-bold uppercase tracking-wide">Owner Mode</span>}
+        </NavLink>
+      </div>
 
       <div className={`px-2 py-4 border-t border-white/10 ${collapsed ? 'flex justify-center' : ''}`}>
         {!collapsed && (
