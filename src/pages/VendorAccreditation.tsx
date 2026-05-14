@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, X, CheckCircle, XCircle, FileText, Brain,
   Phone, Mail, MapPin, Users, TrendingUp, Calendar, Award, Clock,
@@ -348,6 +349,26 @@ export const VendorAccreditation: React.FC = () => {
   const [regionFilter, setRegionFilter] = useState<string>('All');
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [vendors, setVendors] = useState(allVendors);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // On mount — auto-open vendor from URL
+  useEffect(() => {
+    const id = searchParams.get('vendor');
+    if (id) {
+      const match = allVendors.find(v => v.id === id);
+      if (match) setSelectedVendor(match);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openVendor = (vendor: Vendor) => {
+    setSelectedVendor(vendor);
+    setSearchParams({ vendor: vendor.id });
+  };
+
+  const closeVendor = () => {
+    setSelectedVendor(null);
+    setSearchParams({});
+  };
 
   const handleApprove = (id: string) => {
     setVendors(prev => prev.map(v => v.id === id ? { ...v, status: 'Accredited' as VendorStatus } : v));
@@ -457,7 +478,7 @@ export const VendorAccreditation: React.FC = () => {
             <button
               key={vendor.id}
               className="w-full text-left bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md transition-shadow active:bg-gray-50"
-              onClick={() => setSelectedVendor(vendor)}
+              onClick={() => openVendor(vendor)}
               aria-label={`View details for ${vendor.companyName}`}
             >
               <div className="flex items-start justify-between mb-2">
@@ -519,9 +540,9 @@ export const VendorAccreditation: React.FC = () => {
                   <tr
                     key={vendor.id}
                     className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => setSelectedVendor(vendor)}
+                    onClick={() => openVendor(vendor)}
                     tabIndex={0}
-                    onKeyDown={e => e.key === 'Enter' && setSelectedVendor(vendor)}
+                    onKeyDown={e => e.key === 'Enter' && openVendor(vendor)}
                     role="button"
                     aria-label={`View details for ${vendor.companyName}`}
                   >
@@ -563,7 +584,7 @@ export const VendorAccreditation: React.FC = () => {
                       }
                     </td>
                     <td className="py-3 px-4">
-                      <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); setSelectedVendor(vendor); }}>
+                      <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); openVendor(vendor); }}>
                         View
                       </Button>
                     </td>
@@ -583,7 +604,7 @@ export const VendorAccreditation: React.FC = () => {
       {selectedVendor && (
         <VendorDrawer
           vendor={selectedVendor}
-          onClose={() => setSelectedVendor(null)}
+          onClose={closeVendor}
           onApprove={handleApprove}
           onReject={handleReject}
         />

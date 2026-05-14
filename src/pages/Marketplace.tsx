@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   MapPin, Users, Calendar, DollarSign, Plus, Filter, Search,
   Brain, Calculator, Clock, ChevronRight, TrendingUp, X, CheckCircle,
@@ -292,6 +293,46 @@ export const Marketplace: React.FC = () => {
   const [requirements, setRequirements] = useState(allRequirements);
   const [awardBanner, setAwardBanner] = useState<string | null>(null);
   const awardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Wrapper: open requirement detail drawer
+  const openDetail = useCallback((req: Requirement) => {
+    setDetailReq(req);
+    setSearchParams({ req: req.id });
+  }, [setSearchParams]);
+
+  // Wrapper: close requirement detail drawer
+  const closeDetail = useCallback(() => {
+    setDetailReq(null);
+    setSearchParams({});
+  }, [setSearchParams]);
+
+  // Wrapper: open bids modal
+  const openBids = useCallback((req: Requirement) => {
+    setBidsReq(req);
+    setSearchParams({ bids: req.id });
+  }, [setSearchParams]);
+
+  // Wrapper: close bids modal
+  const closeBids = useCallback(() => {
+    setBidsReq(null);
+    setSearchParams({});
+  }, [setSearchParams]);
+
+  // On mount — restore drawer/modal state from URL
+  useEffect(() => {
+    const reqId = searchParams.get('req');
+    const bidsId = searchParams.get('bids');
+    if (reqId) {
+      const match = allRequirements.find(r => r.id === reqId);
+      if (match) setDetailReq(match);
+    }
+    if (bidsId) {
+      const match = allRequirements.find(r => r.id === bidsId);
+      if (match) setBidsReq(match);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Bid submission form state
   const [bidVendorName, setBidVendorName] = useState('');
@@ -371,7 +412,7 @@ export const Marketplace: React.FC = () => {
     }));
     const updatedReq: Requirement = { ...bidsReq, bids: updatedBids, status: 'Filled' };
     setRequirements(prev => prev.map(r => r.id === bidsReq.id ? updatedReq : r));
-    setBidsReq(null);
+    closeBids();
     setAwardBanner(`Awarded to ${acceptedVendor}`);
   };
 
@@ -526,8 +567,8 @@ export const Marketplace: React.FC = () => {
             <div key={req.id} role="listitem">
               <RequirementCard
                 req={req}
-                onViewDetail={setDetailReq}
-                onViewBids={setBidsReq}
+                onViewDetail={openDetail}
+                onViewBids={openBids}
               />
             </div>
           ))}
@@ -543,14 +584,14 @@ export const Marketplace: React.FC = () => {
       {detailReq && (
         <RequirementDetail
           req={detailReq}
-          onClose={() => setDetailReq(null)}
-          onViewBids={req => { setDetailReq(null); setBidsReq(req); }}
+          onClose={closeDetail}
+          onViewBids={req => { setDetailReq(null); openBids(req); }}
         />
       )}
 
       {/* Bids Modal */}
       {bidsReq && (
-        <Modal isOpen={!!bidsReq} onClose={() => setBidsReq(null)} title={`Bids — ${bidsReq.title}`} size="lg">
+        <Modal isOpen={!!bidsReq} onClose={closeBids} title={`Bids — ${bidsReq.title}`} size="lg">
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div className="bg-gray-50 rounded-lg p-3">

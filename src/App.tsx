@@ -12,6 +12,7 @@ import { Compliance } from './pages/Compliance';
 import { Settings } from './pages/Settings';
 import { VendorOnboarding } from './pages/VendorOnboarding';
 import { OwnerAlignment } from './pages/OwnerAlignment';
+import { Debug } from './pages/Debug';
 
 const App: React.FC = () => {
   return (
@@ -30,6 +31,7 @@ const App: React.FC = () => {
           <Route path="compliance" element={<Compliance />} />
           <Route path="settings" element={<Settings />} />
           <Route path="owner" element={<OwnerAlignment />} />
+          <Route path="debug" element={<Debug />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw,
   Wallet, ArrowUpRight, ArrowDownLeft, X, FileText, Calendar, Users,
@@ -447,6 +448,7 @@ const PayoutLedger: React.FC = () => {
 // ─── Main Billing Page ────────────────────────────────────────────────────────
 
 export const Billing: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'invoices' | 'payouts'>('invoices');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -455,6 +457,33 @@ export const Billing: React.FC = () => {
   const [flagModal, setFlagModal] = useState<Invoice | null>(null);
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
+
+  // On mount — restore tab and open invoice drawer from URL
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'payouts' || tab === 'invoices') setActiveTab(tab);
+
+    const invoiceId = searchParams.get('invoice');
+    if (invoiceId) {
+      const match = allInvoices.find(i => i.id === invoiceId);
+      if (match) setDetailInvoice(match);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const switchTab = (tab: 'invoices' | 'payouts') => {
+    setActiveTab(tab);
+    setSearchParams(prev => { prev.set('tab', tab); return prev; });
+  };
+
+  const openInvoice = (inv: Invoice) => {
+    setDetailInvoice(inv);
+    setSearchParams(prev => { prev.set('invoice', inv.id); return prev; });
+  };
+
+  const closeInvoice = () => {
+    setDetailInvoice(null);
+    setSearchParams(prev => { prev.delete('invoice'); return prev; });
+  };
 
   const vendorNames = [...new Set(allInvoices.map(i => i.vendorName))].sort();
 
@@ -513,7 +542,7 @@ export const Billing: React.FC = () => {
         ] as const).map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => switchTab(tab.id)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-white text-gray-900 shadow-sm'
@@ -631,9 +660,9 @@ export const Billing: React.FC = () => {
                     <tr
                       key={inv.id}
                       className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${inv.status === 'Overdue' ? 'bg-red-50/40' : inv.status === 'Disputed' ? 'bg-yellow-50/40' : ''}`}
-                      onClick={() => setDetailInvoice(inv)}
+                      onClick={() => openInvoice(inv)}
                       tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && setDetailInvoice(inv)}
+                      onKeyDown={e => e.key === 'Enter' && openInvoice(inv)}
                       role="button"
                       aria-label={`View invoice ${inv.invoiceNumber}`}
                     >
@@ -720,8 +749,8 @@ export const Billing: React.FC = () => {
       {detailInvoice && (
         <InvoiceDetail
           invoice={detailInvoice}
-          onClose={() => setDetailInvoice(null)}
-          onFlag={inv => { setDetailInvoice(null); handleFlagDispute(inv); }}
+          onClose={closeInvoice}
+          onFlag={inv => { closeInvoice(); handleFlagDispute(inv); }}
         />
       )}
     </div>

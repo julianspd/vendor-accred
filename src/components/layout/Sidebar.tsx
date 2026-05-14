@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ShoppingBag, Truck, Receipt,
-  BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Zap, KeyRound,
+  BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Zap, KeyRound, Bug,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -11,6 +11,10 @@ interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
 }
+
+const devItems = [
+  { to: '/debug', icon: Bug, label: 'Debug' },
+];
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -78,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
       </nav>
 
       {/* Owner Mode */}
-      <div className="px-2 pb-2">
+      <div className="px-2 pb-1">
         <NavLink
           to="/owner"
           onClick={onMobileClose}
@@ -94,6 +98,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
           <KeyRound size={16} aria-hidden="true" className="flex-shrink-0" />
           {!collapsed && <span className="truncate text-xs font-bold uppercase tracking-wide">Owner Mode</span>}
         </NavLink>
+      </div>
+
+      {/* Dev Tools */}
+      <div className="px-2 pb-2">
+        {devItems.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={onMobileClose}
+            aria-label={label}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? 'bg-white/10 text-white/90'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+              }`
+            }
+          >
+            <Icon size={15} aria-hidden="true" className="flex-shrink-0" />
+            {!collapsed && <span className="truncate text-xs font-medium">{label}</span>}
+          </NavLink>
+        ))}
       </div>
 
       <div className={`px-2 py-4 border-t border-white/10 ${collapsed ? 'flex justify-center' : ''}`}>
