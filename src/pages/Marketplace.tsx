@@ -338,18 +338,23 @@ export const Marketplace: React.FC = () => {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — clickable filters */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Open', count: requirements.filter(r => r.status === 'Open').length, variant: 'info' as const },
-          { label: 'In Progress', count: requirements.filter(r => r.status === 'In Progress').length, variant: 'warning' as const },
-          { label: 'Filled', count: requirements.filter(r => r.status === 'Filled').length, variant: 'success' as const },
-          { label: 'Closed', count: requirements.filter(r => r.status === 'Closed').length, variant: 'default' as const },
+          { label: 'Open', count: requirements.filter(r => r.status === 'Open').length },
+          { label: 'In Progress', count: requirements.filter(r => r.status === 'In Progress').length },
+          { label: 'Filled', count: requirements.filter(r => r.status === 'Filled').length },
+          { label: 'Closed', count: requirements.filter(r => r.status === 'Closed').length },
         ].map(s => (
-          <Card key={s.label}>
+          <button
+            key={s.label}
+            onClick={() => setStatusFilter(statusFilter === s.label ? 'All' : s.label)}
+            className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md min-h-[80px] ${statusFilter === s.label ? 'border-asianow-blue ring-2 ring-asianow-blue/20' : 'border-gray-100'}`}
+            aria-pressed={statusFilter === s.label}
+          >
             <p className="text-2xl font-bold text-gray-900">{s.count}</p>
             <StatusBadge status={s.label} size="md" />
-          </Card>
+          </button>
         ))}
       </div>
 
